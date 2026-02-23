@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vacuum Curvature Simulator v0.04</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0c1222; --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(148,163,184,0.12); --border-bright: rgba(148,163,184,0.25);
+      --text: #e2e8f0; --text-dim: #94a3b8; --text-muted: #64748b;
+      --accent: #818cf8; --cyan: #22d3ee; --orange: #f59e0b; --magenta: #ec4899;
+      --radius: 12px;
+    }
+    body {
+      background: linear-gradient(145deg, #0c1222 0%, #1a1042 50%, #0f172a 100%);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh; overflow-x: hidden;
+    }
+    header {
+      padding: 20px 28px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    header h1 {
+      font-size: 16px; font-weight: 600; letter-spacing: 0.5px;
+      background: linear-gradient(135deg, var(--cyan), var(--accent));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-controls { display: flex; gap: 8px; align-items: center; }
+    .step-display {
+      font-size: 12px; color: var(--text-muted); font-weight: 400;
+      margin-right: 12px; font-variant-numeric: tabular-nums;
+    }
+    .main {
+      display: grid; grid-template-columns: 1fr 1fr 290px;
+      grid-template-rows: auto auto auto; gap: 12px;
+      padding: 0 20px 20px; max-width: 1440px; margin: 0 auto;
+    }
+    .sim-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; backdrop-filter: blur(12px);
+    }
+    .sim-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .sim-title { font-size: 13px; font-weight: 600; letter-spacing: 0.3px; }
+    .sim-title.no-curv { color: var(--orange); }
+    .sim-title.with-curv { color: var(--magenta); }
+    .sim-metric { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+    .sim-canvas {
+      width: 100%; aspect-ratio: 1; display: block;
+      border-radius: 8px; background: rgba(0,0,0,0.4); cursor: grab;
+    }
+    .sim-canvas.grabbing { cursor: grabbing; }
+    .btn-fullscreen {
+      display: block; width: 100%; margin-top: 8px; padding: 5px 0;
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-muted); font-family: 'Inter', system-ui; font-size: 10px;
+      font-weight: 500; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-fullscreen:hover { background: var(--surface-hover); border-color: var(--border-bright); color: var(--text); }
+    .sim-panel:fullscreen, .sim-panel:-webkit-full-screen {
+      background: #0a0e1a; padding: 0; display: flex; flex-direction: column;
+      border: none; border-radius: 0;
+    }
+    .sim-panel:fullscreen .sim-label, .sim-panel:-webkit-full-screen .sim-label {
+      padding: 16px 20px 8px; position: absolute; top: 0; left: 0; right: 0;
+      z-index: 10; background: linear-gradient(to bottom, rgba(10,14,26,0.9), transparent);
+    }
+    .sim-panel:fullscreen .sim-canvas, .sim-panel:-webkit-full-screen .sim-canvas {
+      width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0;
+    }
+    .sim-panel:fullscreen .btn-fullscreen, .sim-panel:-webkit-full-screen .btn-fullscreen {
+      position: absolute; bottom: 12px; right: 12px; width: auto; padding: 6px 14px;
+      z-index: 10; background: rgba(0,0,0,0.6); border-color: var(--border-bright);
+    }
+    .sidebar { grid-row: 1 / 4; grid-column: 3; display: flex; flex-direction: column; gap: 10px; }
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; backdrop-filter: blur(12px);
+    }
+    .panel-title {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 12px;
+    }
+    .control-row {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+    }
+    .control-row:last-child { margin-bottom: 0; }
+    .control-label { font-size: 12px; color: var(--text-dim); min-width: 70px; }
+    .control-val {
+      width: 62px; min-width: 62px; text-align: right; font-variant-numeric: tabular-nums;
+      font-size: 12px; font-weight: 500; color: var(--text);
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 6px; font-family: 'Inter', system-ui;
+      outline: none; transition: border-color 0.15s;
+    }
+    .control-val:focus { border-color: var(--accent); background: rgba(129,140,248,0.08); }
+    input[type=range] {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; background: rgba(255,255,255,0.1);
+      border-radius: 2px; outline: none; cursor: pointer; margin: 0 8px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px;
+      background: var(--accent); border-radius: 50%; cursor: pointer;
+      box-shadow: 0 0 8px rgba(129,140,248,0.4);
+    }
+    .btn {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text-dim); font-family: 'Inter', system-ui, sans-serif;
+      font-size: 11px; font-weight: 500; padding: 6px 14px;
+      border-radius: 6px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px;
+    }
+    .btn:hover { background: var(--surface-hover); border-color: var(--border-bright); color: var(--text); }
+    .btn.active { background: rgba(129,140,248,0.15); border-color: var(--accent); color: var(--accent); }
+    .btn.primary { background: rgba(129,140,248,0.12); border-color: rgba(129,140,248,0.3); color: var(--accent); }
+    .chart-panel { grid-column: 1 / 3; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .chart-label { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; letter-spacing: 0.5px; }
+    .chart-canvas { width: 100%; height: 330px; display: block; border-radius: 6px; background: rgba(0,0,0,0.3); }
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+    .metric-item { display: flex; flex-direction: column; }
+    .metric-item .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+    .metric-item .value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .metric-item .value.orange { color: var(--orange); }
+    .metric-item .value.magenta { color: var(--magenta); }
+    .speed-control { display: flex; align-items: center; gap: 6px; }
+    .speed-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+    .speed-dot.active { background: var(--accent); box-shadow: 0 0 6px rgba(129,140,248,0.5); }
+    .help-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 1px solid var(--border-bright); color: var(--text-muted);
+      font-size: 9px; font-weight: 600; cursor: pointer;
+      margin-left: 2px; flex-shrink: 0; position: relative;
+      transition: all 0.15s; line-height: 1;
+    }
+    .help-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .help-popup {
+      display: none; position: absolute; left: 22px; top: 50%;
+      transform: translateY(-50%); background: #1e293b;
+      border: 1px solid var(--border-bright); border-radius: 8px;
+      padding: 8px 10px; font-size: 11px; color: var(--text);
+      width: 220px; z-index: 100; line-height: 1.5;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-weight: 400; pointer-events: none;
+    }
+    .help-btn:hover .help-popup { display: block; }
+    .curv-highlight {
+      background: rgba(236,72,153,0.06); border: 1px solid rgba(236,72,153,0.15);
+      border-radius: 8px; padding: 10px 12px; margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vacuum Curvature — Structure Formation v0.04</h1>
+    <div class="header-controls">
+      <span class="step-display" id="stepDisplay">Step 0 · t = 0.0</span>
+      <button class="btn primary" id="btnPlayPause">▶ Play</button>
+      <button class="btn" id="btnStep">Step</button>
+      <button class="btn" id="btnReset">Reset</button>
+      <button class="btn" id="btnCenter" title="Reset camera to origin">⊙ Center</button>
+      <div class="speed-control">
+        <span style="font-size:10px;color:var(--text-muted)">Speed</span>
+        <div class="speed-dot active" data-speed="1"></div>
+        <div class="speed-dot" data-speed="3"></div>
+        <div class="speed-dot" data-speed="8"></div>
+        <div class="speed-dot" data-speed="20"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="sim-panel" id="panel1">
+      <div class="sim-label">
+        <span class="sim-title no-curv">Gravity Only</span>
+        <span class="sim-metric" id="metricNoCurv">R = — · H = —</span>
+      </div>
+      <canvas class="sim-canvas" id="canvasNoCurv"></canvas>
+      <button class="btn-fullscreen" data-panel="panel1">⛶ Fullscreen</button>
+    </div>
+    <div class="sim-panel" id="panel2">
+      <div class="sim-label">
+        <span class="sim-title with-curv">Gravity + Curvature</span>
+        <span class="sim-metric" id="metricCurv">R = — · H = —</span>
+      </div>
+      <canvas class="sim-canvas" id="canvasCurv"></canvas>
+      <button class="btn-fullscreen" data-panel="panel2">⛶ Fullscreen</button>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-title">Initial Conditions (both panels)</div>
+        <div class="control-row">
+          <span class="control-label">H₀<span class="help-btn">?<span class="help-popup">Initial outward velocity: v = H₀ × r. The Big Bang's expansion.</span></span></span>
+          <input type="range" id="sliderH0" min="0.01" max="1.5" step="0.01" value="0.30">
+          <input type="text" class="control-val" id="valH0" value="0.30">
+        </div>
+        <div class="control-row">
+          <span class="control-label">Radius₀<span class="help-btn">?<span class="help-popup">Initial cluster size (σ of Gaussian). We start post-singularity.</span></span></span>
+          <input type="range" id="sliderR0" min="1" max="20" step="0.5" value="5">
+          <input type="text" class="control-val" id="valR0" value="5.0">
+        </div>
+        <div class="control-row">
+          <span class="control-label">G<span class="help-btn">?<span class="help-popup">Gravitational coupling. Attractive force ∝ G/r². Decays with distance.</span></span></span>
+          <input type="range" id="sliderG" min="0.0001" max="0.05" step="0.0001" value="0.005">
+          <input type="text" class="control-val" id="valG" value="0.0050">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title" style="color:var(--magenta)">Curvature (right panel only)</div>
+        <div class="curv-highlight">
+          <div class="control-row">
+            <span class="control-label" style="color:var(--magenta)">ε₀<span class="help-btn">?<span class="help-popup"><b>THE curvature parameter.</b> Outward force ∝ ε₀ × r. Grows with distance. Zero = both panels identical.</span></span></span>
+            <input type="range" id="sliderEps" min="0" max="0.05" step="0.0001" value="0.005">
+            <input type="text" class="control-val" id="valEps" value="0.0050">
+          </div>
+          <div class="control-row">
+            <span class="control-label" style="color:var(--magenta)">ε decay<span class="help-btn">?<span class="help-popup">Curvature decays as ε₀/(1+t/τ)² — matching Λ∝1/t² from RVM literature. 0 = instant decay. Higher = persists longer.</span></span></span>
+            <input type="range" id="sliderEpsDecay" min="0" max="10000" step="10" value="10000">
+            <input type="text" class="control-val" id="valEpsDecay" value="10000">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Setup</div>
+        <div class="control-row">
+          <span class="control-label">N<span class="help-btn">?<span class="help-popup">Particle count. Gravity is O(N²) so 1000+ gets slow.</span></span></span>
+          <input type="range" id="sliderN" min="100" max="5000" step="100" value="500">
+          <input type="text" class="control-val" id="valN" value="500">
+        </div>
+        <div class="control-row">
+          <span class="control-label">Softening<span class="help-btn">?<span class="help-popup">Prevents gravitational singularity at close range.</span></span></span>
+          <input type="range" id="sliderSoft" min="0.2" max="5" step="0.1" value="2.0">
+          <input type="text" class="control-val" id="valSoft" value="2.0">
+        </div>
+        <div class="control-row">
+          <span class="control-label">dt<span class="help-btn">?<span class="help-popup">Timestep. Smaller = more accurate but slower.</span></span></span>
+          <input type="range" id="sliderDt" min="0.02" max="0.5" step="0.01" value="0.10">
+          <input type="text" class="control-val" id="valDt" value="0.10">
+        </div>
+        <div class="control-row">
+          <span class="control-label">Zoom<span class="help-btn">?<span class="help-popup">Camera zoom (sim units). Scroll wheel also works.</span></span></span>
+          <input type="range" id="sliderZoom" min="10" max="250000" step="10" value="200">
+          <input type="text" class="control-val" id="valZoom" value="200">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Live Metrics (measured)</div>
+        <div class="metric-grid">
+          <div class="metric-item"><span class="label">R (grav)</span><span class="value orange" id="liveR1">—</span></div>
+          <div class="metric-item"><span class="label">R (curv)</span><span class="value magenta" id="liveR2">—</span></div>
+          <div class="metric-item"><span class="label">H (grav)</span><span class="value orange" id="liveH1">—</span></div>
+          <div class="metric-item"><span class="label">H (curv)</span><span class="value magenta" id="liveH2">—</span></div>
+          <div class="metric-item"><span class="label">ε(t)</span><span class="value magenta" id="liveCurv">—</span></div>
+        </div>
+      </div>
+
+      <div class="panel" style="font-size:11px;color:var(--text-muted);line-height:1.6">
+        <div class="panel-title">About v0.04</div>
+        <b style="color:var(--cyan)">Pure Newtonian physics.</b> No prescribed expansion.<br><br>
+        <b>Both panels:</b> Big Bang (H₀×r) + gravity (1/r²).<br>
+        <b style="color:var(--magenta)">Right only:</b> curvature (∝ r, repulsive).<br><br>
+        <span style="color:var(--orange)">●</span> Gravity → collapse &nbsp;
+        <span style="color:var(--magenta)">●</span> + Curvature → structure<br>
+        H(t) <b>measured</b>, not prescribed.
+      </div>
+    </div>
+
+    <!-- Full-run charts -->
+    <div class="chart-panel sim-panel">
+      <div class="charts-row">
+        <div>
+          <div class="chart-label">Expansion History (Mean Radius) — Full Run</div>
+          <canvas class="chart-canvas" id="chartRadius"></canvas>
+        </div>
+        <div>
+          <div class="chart-label">Measured H(t) — Full Run</div>
+          <canvas class="chart-canvas" id="chartHubble"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Early-history charts (first 100 steps) -->
+    <div class="chart-panel sim-panel">
+      <div class="charts-row">
+        <div>
+          <div class="chart-label">Expansion History — First 100 Steps (Early Universe)</div>
+          <canvas class="chart-canvas" id="chartRadiusEarly"></canvas>
+        </div>
+        <div>
+          <div class="chart-label">Measured H(t) — First 100 Steps (Early Universe)</div>
+          <canvas class="chart-canvas" id="chartHubbleEarly"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════ PRNG ═══════════════════
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussRandom(rng) {
+  let u1 = rng(), u2 = rng();
+  while (u1 === 0) u1 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// ═══════════════════ SIMULATION ═══════════════════
+class Simulation {
+  constructor(params, hasCurvature) {
+    this.G = params.G;
+    this.eps0 = hasCurvature ? params.eps0 : 0;
+    this.epsDecay = params.epsDecay;
+    this.soft = params.softening;
+    this.dt = params.dt;
+    this.N = params.N;
+    this.t = 0;
+    this.step = 0;
+
+    const rng = mulberry32(42);
+    this.px = new Float64Array(this.N);
+    this.py = new Float64Array(this.N);
+    this.vx = new Float64Array(this.N);
+    this.vy = new Float64Array(this.N);
+
+    for (let i = 0; i < this.N; i++) {
+      this.px[i] = gaussRandom(rng) * params.initRadius;
+      this.py[i] = gaussRandom(rng) * params.initRadius;
+      this.vx[i] = params.H0 * this.px[i];
+      this.vy[i] = params.H0 * this.py[i];
+    }
+
+    this.radiusHist = [];
+    this.hHist = [];
+    // Early-history: records ONLY the first 100 steps (never shifts)
+    this.radiusHistEarly = [];
+    this.hHistEarly = [];
+  }
+
+  getCurvature() {
+    if (this.epsDecay <= 0) return 0;
+    const d = 1 + this.t / this.epsDecay;
+    return this.eps0 / (d * d); // Λ ∝ 1/t² (Özer & Taha 1987, Solà Peracaula 2022)
+  }
+
+  meanRadius() {
+    let sum = 0;
+    for (let i = 0; i < this.N; i++) {
+      sum += this.px[i] ** 2 + this.py[i] ** 2;
+    }
+    return Math.sqrt(sum / this.N);
+  }
+
+  measureH() {
+    let vr = 0, rr = 0;
+    for (let i = 0; i < this.N; i++) {
+      vr += this.vx[i] * this.px[i] + this.vy[i] * this.py[i];
+      rr += this.px[i] * this.px[i] + this.py[i] * this.py[i];
+    }
+    return rr > 0 ? vr / rr : 0;
+  }
+
+  advance() {
+    const N = this.N, G = this.G, soft2 = this.soft * this.soft, dt = this.dt;
+    const curv = this.getCurvature();
+    const mR = this.meanRadius();
+    const mH = this.measureH();
+
+    this.radiusHist.push(mR);
+    this.hHist.push(mH);
+    if (this.radiusHist.length > 600) { this.radiusHist.shift(); this.hHist.shift(); }
+
+    // Early history: only record first 100 steps
+    if (this.step < 100) {
+      this.radiusHistEarly.push(mR);
+      this.hHistEarly.push(mH);
+    }
+
+    const ax = new Float64Array(N);
+    const ay = new Float64Array(N);
+
+    // GRAVITY
+    for (let i = 0; i < N; i++) {
+      let axi = 0, ayi = 0;
+      const xi = this.px[i], yi = this.py[i];
+      for (let j = 0; j < N; j++) {
+        const dx = xi - this.px[j], dy = yi - this.py[j];
+        const r2 = dx * dx + dy * dy + soft2;
+        const inv_r = 1.0 / Math.sqrt(r2);
+        const inv_r3 = inv_r * inv_r * inv_r;
+        axi -= G * dx * inv_r3;
+        ayi -= G * dy * inv_r3;
+      }
+      ax[i] = axi; ay[i] = ayi;
+    }
+
+    // CURVATURE
+    if (curv > 0) {
+      for (let i = 0; i < N; i++) {
+        ax[i] += curv * this.px[i];
+        ay[i] += curv * this.py[i];
+      }
+    }
+
+    for (let i = 0; i < N; i++) {
+      this.vx[i] += ax[i] * dt;
+      this.vy[i] += ay[i] * dt;
+      this.px[i] += this.vx[i] * dt;
+      this.py[i] += this.vy[i] * dt;
+    }
+    this.t += dt;
+    this.step++;
+  }
+}
+
+// ═══════════════════ STATE ═══════════════════
+let params = {
+  G: 0.005, H0: 0.30, eps0: 0.005, epsDecay: 10000,
+  N: 500, initRadius: 5.0, softening: 2.0, dt: 0.10
+};
+let sim1, sim2, running = false, stepsPerFrame = 1;
+let viewRadius = 200, camX = 0, camY = 0;
+
+function initSims() {
+  sim1 = new Simulation(params, false);
+  sim2 = new Simulation(params, true);
+}
+initSims();
+
+// ═══════════════════ RENDERING ═══════════════════
+const c1 = document.getElementById('canvasNoCurv');
+const c2 = document.getElementById('canvasCurv');
+const ctx1 = c1.getContext('2d'), ctx2 = c2.getContext('2d');
+
+function resizeCanvases() {
+  [c1, c2].forEach(c => {
+    const w = c.clientWidth, h = c.clientHeight;
+    c.width = w * devicePixelRatio;
+    c.height = h * devicePixelRatio;
+  });
+}
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
+
+function drawSim(ctx, sim, color, canvas) {
+  const w = canvas.width, h = canvas.height;
+  const size = Math.min(w, h);
+  ctx.clearRect(0, 0, w, h);
+  const viewR = viewRadius;
+  const scale = size / (2 * viewR);
+  const cx = w / 2 - camX * scale, cy = h / 2 - camY * scale;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  const gridStep = Math.pow(10, Math.floor(Math.log10(viewR)));
+  const gStart = Math.floor((camX - viewR) / gridStep) * gridStep;
+  const gEnd = Math.ceil((camX + viewR) / gridStep) * gridStep;
+  for (let g = gStart; g <= gEnd; g += gridStep) {
+    const px = cx + g * scale, py = cy + g * scale;
+    if (px > 0 && px < w) { ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke(); }
+    if (py > 0 && py < h) { ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke(); }
+  }
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  if (cx > 0 && cx < w) { ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke(); }
+  if (cy > 0 && cy < h) { ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke(); }
+
+  const mR = sim.meanRadius();
+  const rPx = mR * scale;
+  if (rPx > 2 && rPx < size * 2) {
+    ctx.strokeStyle = color.replace('0.85', '0.25');
+    ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(cx, cy, rPx, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const r = Math.max(1.5, 3 * devicePixelRatio * (500 / sim.N));
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  for (let i = 0; i < sim.N; i++) {
+    const x = cx + sim.px[i] * scale, y = cy + sim.py[i] * scale;
+    if (x < -r || x > w + r || y < -r || y > h + r) continue;
+    ctx.moveTo(x + r, y);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+}
+
+// ═══════════════════ CHARTS ═══════════════════
+const chartR = document.getElementById('chartRadius');
+const chartH = document.getElementById('chartHubble');
+const chartRE = document.getElementById('chartRadiusEarly');
+const chartHE = document.getElementById('chartHubbleEarly');
+
+function resizeCharts() {
+  [chartR, chartH, chartRE, chartHE].forEach(c => {
+    c.width = c.clientWidth * devicePixelRatio;
+    c.height = c.clientHeight * devicePixelRatio;
+  });
+}
+resizeCharts();
+window.addEventListener('resize', resizeCharts);
+
+function drawChart(canvas, data1, data2, logScale) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = { l: 55, r: 10, t: 8, b: 20 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
+  if (data1.length < 2) return;
+  let yMin = Infinity, yMax = -Infinity;
+  for (let i = 0; i < data1.length; i++) {
+    const v1 = logScale ? Math.log10(Math.max(1e-8, Math.abs(data1[i]))) : data1[i];
+    const v2 = logScale ? Math.log10(Math.max(1e-8, Math.abs(data2[i]))) : data2[i];
+    yMin = Math.min(yMin, v1, v2); yMax = Math.max(yMax, v1, v2);
+  }
+  if (yMax <= yMin) { yMin -= 0.5; yMax += 0.5; }
+  const yRange = yMax - yMin; yMin -= yRange * 0.05; yMax += yRange * 0.05;
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = pad.t + (i / 4) * ph; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = `${9 * devicePixelRatio}px Inter, system-ui`;
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const val = yMax - (i / 4) * (yMax - yMin); const y = pad.t + (i / 4) * ph;
+    ctx.fillText(logScale ? Math.pow(10, val).toExponential(1) : val.toFixed(1), pad.l - 4, y + 3);
+  }
+  function plotLine(data, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2 * devicePixelRatio; ctx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = pad.l + (i / (data.length - 1)) * pw;
+      const v = logScale ? Math.log10(Math.max(1e-8, Math.abs(data[i]))) : data[i];
+      const y = pad.t + (1 - (v - yMin) / (yMax - yMin)) * ph;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  plotLine(data1, 'rgba(245,158,11,0.9)');
+  plotLine(data2, 'rgba(236,72,153,0.9)');
+}
+
+// ═══════════════════ UI ═══════════════════
+function updateMetrics() {
+  const r1 = sim1.meanRadius(), r2 = sim2.meanRadius();
+  const h1 = sim1.measureH(), h2 = sim2.measureH();
+  document.getElementById('metricNoCurv').textContent = `R = ${r1.toFixed(0)} · H = ${h1.toFixed(4)}`;
+  document.getElementById('metricCurv').textContent = `R = ${r2.toFixed(0)} · H = ${h2.toFixed(4)}`;
+  document.getElementById('stepDisplay').textContent = `Step ${sim1.step} · t = ${sim1.t.toFixed(1)}`;
+  document.getElementById('liveR1').textContent = r1.toFixed(1);
+  document.getElementById('liveR2').textContent = r2.toFixed(1);
+  document.getElementById('liveH1').textContent = h1.toFixed(5);
+  document.getElementById('liveH2').textContent = h2.toFixed(5);
+  document.getElementById('liveCurv').textContent = sim2.getCurvature().toExponential(2);
+}
+
+// ═══════════════════ CONTROLS ═══════════════════
+// Bidirectional slider ↔ text input binding
+function bindControl(sliderId, inputId, key, fmt) {
+  const slider = document.getElementById(sliderId);
+  const input = document.getElementById(inputId);
+
+  // Slider → text + params
+  slider.addEventListener('input', () => {
+    params[key] = parseFloat(slider.value);
+    input.value = fmt(params[key]);
+    initSims();
+  });
+
+  // Text → slider + params (on Enter or blur)
+  function applyText() {
+    const v = parseFloat(input.value);
+    if (!isNaN(v)) {
+      params[key] = v;
+      slider.value = v; // will clamp to slider range, but params gets exact value
+      input.value = fmt(v);
+      initSims();
+    }
+  }
+  input.addEventListener('change', applyText);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { applyText(); input.blur(); } });
+}
+
+const f5 = v => v.toFixed(5), f4 = v => v.toFixed(4), f2 = v => v.toFixed(2);
+const f1 = v => v.toFixed(1), f0 = v => String(Math.round(v));
+
+bindControl('sliderH0', 'valH0', 'H0', f2);
+bindControl('sliderR0', 'valR0', 'initRadius', f1);
+bindControl('sliderG', 'valG', 'G', f4);
+bindControl('sliderEps', 'valEps', 'eps0', f5);
+bindControl('sliderEpsDecay', 'valEpsDecay', 'epsDecay', f0);
+bindControl('sliderN', 'valN', 'N', f0);
+bindControl('sliderSoft', 'valSoft', 'softening', f1);
+bindControl('sliderDt', 'valDt', 'dt', f2);
+
+// Zoom (no sim reset)
+const zoomSlider = document.getElementById('sliderZoom');
+const zoomInput = document.getElementById('valZoom');
+zoomSlider.addEventListener('input', () => {
+  viewRadius = parseFloat(zoomSlider.value);
+  zoomInput.value = Math.round(viewRadius);
+});
+function applyZoomText() {
+  const v = parseFloat(zoomInput.value);
+  if (!isNaN(v) && v > 0) { viewRadius = v; zoomSlider.value = v; zoomInput.value = Math.round(v); }
+}
+zoomInput.addEventListener('change', applyZoomText);
+zoomInput.addEventListener('keydown', e => { if (e.key === 'Enter') { applyZoomText(); zoomInput.blur(); } });
+
+document.getElementById('btnPlayPause').addEventListener('click', function () {
+  running = !running;
+  this.textContent = running ? '⏸ Pause' : '▶ Play';
+  this.classList.toggle('active', running);
+});
+document.getElementById('btnStep').addEventListener('click', () => { sim1.advance(); sim2.advance(); });
+document.getElementById('btnReset').addEventListener('click', () => {
+  initSims(); running = false; camX = 0; camY = 0;
+  document.getElementById('btnPlayPause').textContent = '▶ Play';
+  document.getElementById('btnPlayPause').classList.remove('active');
+});
+document.getElementById('btnCenter').addEventListener('click', () => { camX = 0; camY = 0; });
+
+document.querySelectorAll('.speed-dot').forEach(dot => {
+  dot.addEventListener('click', function () {
+    stepsPerFrame = parseInt(this.dataset.speed);
+    document.querySelectorAll('.speed-dot').forEach(d => d.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+// Mouse wheel zoom
+function handleWheel(e) {
+  e.preventDefault();
+  viewRadius = Math.max(10, Math.min(250000, viewRadius * (e.deltaY > 0 ? 1.1 : 0.9)));
+  zoomSlider.value = viewRadius;
+  zoomInput.value = Math.round(viewRadius);
+}
+c1.addEventListener('wheel', handleWheel, { passive: false });
+c2.addEventListener('wheel', handleWheel, { passive: false });
+
+// Click & drag panning
+let dragging = false, dragStartX = 0, dragStartY = 0, dragCamX = 0, dragCamY = 0;
+function startDrag(e) {
+  dragging = true; dragStartX = e.clientX; dragStartY = e.clientY;
+  dragCamX = camX; dragCamY = camY;
+  e.target.classList.add('grabbing');
+}
+function doDrag(e) {
+  if (!dragging) return;
+  const size = Math.min(c1.clientWidth, c1.clientHeight);
+  const simPerPx = (2 * viewRadius) / size;
+  camX = dragCamX - (e.clientX - dragStartX) * simPerPx;
+  camY = dragCamY - (e.clientY - dragStartY) * simPerPx;
+}
+function endDrag() {
+  dragging = false;
+  c1.classList.remove('grabbing'); c2.classList.remove('grabbing');
+}
+[c1, c2].forEach(c => {
+  c.addEventListener('mousedown', startDrag);
+  c.addEventListener('mousemove', doDrag);
+  c.addEventListener('mouseup', endDrag);
+  c.addEventListener('mouseleave', endDrag);
+});
+
+// ═══════════════════ FULLSCREEN ═══════════════════
+document.querySelectorAll('.btn-fullscreen').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const panel = document.getElementById(this.dataset.panel);
+    if (document.fullscreenElement === panel) {
+      document.exitFullscreen();
+      this.textContent = '⛶ Fullscreen';
+    } else {
+      panel.requestFullscreen().then(() => {
+        this.textContent = '✕ Exit Fullscreen';
+        setTimeout(resizeCanvases, 100);
+      });
+    }
+  });
+});
+document.addEventListener('fullscreenchange', () => {
+  setTimeout(resizeCanvases, 50);
+  if (!document.fullscreenElement) {
+    document.querySelectorAll('.btn-fullscreen').forEach(b => b.textContent = '⛶ Fullscreen');
+  }
+});
+
+// ═══════════════════ MAIN LOOP ═══════════════════
+function frame() {
+  if (running) { for (let i = 0; i < stepsPerFrame; i++) { sim1.advance(); sim2.advance(); } }
+  drawSim(ctx1, sim1, 'rgba(245, 158, 11, 0.85)', c1);
+  drawSim(ctx2, sim2, 'rgba(236, 72, 153, 0.85)', c2);
+  drawChart(chartR, sim1.radiusHist, sim2.radiusHist, false);
+  drawChart(chartH, sim1.hHist, sim2.hHist, false);
+  drawChart(chartRE, sim1.radiusHistEarly, sim2.radiusHistEarly, false);
+  drawChart(chartHE, sim1.hHistEarly, sim2.hHistEarly, false);
+  updateMetrics();
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
