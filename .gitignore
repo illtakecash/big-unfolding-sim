@@ -1,2 +1,9 @@
 # Internal planning docs — not deployed
 .plan/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
